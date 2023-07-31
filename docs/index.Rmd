@@ -1,0 +1,207 @@
+---
+title: "Cyclistic Bike-share data analysis"
+author: "Atien"
+output: html_document
+date: "2023-07-28"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Get Started
+
+Loading packages needed in this analysis
+
+```{r load packages}
+library(tidyverse)
+library(janitor)
+library(skimr)
+library(lubridate)
+```
+
+## Import Data
+
+```{r Import and Combine Data}
+data_202207 <- read.csv("202207-divvy-tripdata.csv")
+data_202208 <- read_csv("202208-divvy-tripdata.csv")
+data_202209 <- read_csv("202209-divvy-publictripdata.csv")
+data_202210 <- read_csv("202210-divvy-tripdata.csv")
+data_202211 <- read_csv("202211-divvy-tripdata.csv")
+data_202212 <- read_csv("202212-divvy-tripdata.csv")
+data_202301 <- read_csv("202301-divvy-tripdata.csv")
+data_202302 <- read_csv("202302-divvy-tripdata.csv")
+data_202303 <- read_csv("202303-divvy-tripdata.csv")
+data_202304 <- read_csv("202304-divvy-tripdata.csv")
+data_202305 <- read_csv("202305-divvy-tripdata.csv")
+data_202306 <- read_csv("202306-divvy-tripdata.csv")
+data_202306 <- read_csv('202306-divvy-tripdata.csv')
+
+```
+
+## Check Column Names
+check whether there are different column names
+```{r Check Column Names}
+colnames(data_202207)
+colnames(data_202208)
+colnames(data_202209)
+colnames(data_202210)
+colnames(data_202211)
+colnames(data_202212)
+colnames(data_202301)
+colnames(data_202302)
+colnames(data_202303)
+colnames(data_202304)
+colnames(data_202305)
+colnames(data_202306)
+```
+
+## Data United and Combined
+combined all data into one dataframe
+```{r Data United and Combined}
+compare_df_cols(data_202207,data_202208,data_202209,data_202210,data_202211,data_202212,data_202301,data_202302,data_202303,data_202304,data_202305,data_202306,return = "mismatch")
+data_202207$started_at <- as.POSIXct(data_202207$started_at,format="%Y-%m-%d %H:%M:%S")
+data_202207$ended_at <- as.POSIXct(data_202207$ended_at,format="%Y-%m-%d %H:%M:%S")
+
+data_202207_to_202306 <- bind_rows(data_202207,data_202208,data_202209,data_202210,data_202211,data_202212,data_202301,data_202302,data_202303,data_202304,data_202305,data_202306)
+```
+
+## Add Columns
+add columns for later analysis
+```{r Add Columns}
+data_202207_to_202306$day_of_week <- wday(data_202207_to_202306$started_at,week_start=1)
+data_202207_to_202306$month <- month(data_202207_to_202306$started_at)
+data_202207_to_202306$trip_time <- difftime(data_202207_to_202306$ended_at, data_202207_to_202306$started_at, units="min")
+data_202207_to_202306$trip_time <- round(data_202207_to_202306$trip_time,2)
+data_202207_to_202306$trip_time <- as.numeric(as.character(data_202207_to_202306$trip_time))
+
+```
+
+## Quick Preview Table
+```{r Quick Preview Table}
+skim_without_charts(data_202207_to_202306)
+```
+
+## Data Clean
+drop null value and filter data
+```{r Data Clean}
+data_cleaned <-data_202207_to_202306 %>%
+  drop_na() %>%
+  filter(start_station_name == "HQ QR" | trip_time>0) %>%
+  filter(trip_time<1440 & trip_time>1) %>%
+  filter(started_at < ended_at)
+
+```
+## Analyzing Data
+Descriptive analysis
+```{r Descriptive analysis}
+summary(data_cleaned$trip_time)
+```
+Compare members and casual users
+```{r Compare members and casual users}
+aggregate(data_cleaned$trip_time ~ data_cleaned$member_casual, FUN = mean)
+aggregate(data_cleaned$trip_time ~ data_cleaned$member_casual, FUN = median)
+aggregate(data_cleaned$trip_time ~ data_cleaned$member_casual, FUN = max)
+aggregate(data_cleaned$trip_time ~ data_cleaned$member_casual, FUN = min)
+
+# See the average ride time by each day for members vs casual users
+aggregate(data_cleaned$trip_time ~ data_cleaned$member_casual + data_cleaned$day_of_week, FUN = mean)
+
+# The most commonly used start station for casual user
+popular_start_casual <- data_cleaned %>%
+  group_by(member_casual,start_station_name)%>%
+  count(start_station_name)%>%
+  arrange(desc(n)) %>%
+  filter(member_casual=='casual')
+head(popular_start_casual)
+
+# The most commonly used start station for member
+popular_start_member <- data_cleaned %>%
+  group_by(member_casual,start_station_name)%>%
+  count(start_station_name)%>%
+  arrange(desc(n)) %>%
+  filter(member_casual=='member')
+head(popular_start_member)
+
+# The most commonly used end station for casual user
+popular_end_casual <- data_cleaned %>%
+  group_by(member_casual,end_station_name)%>%
+  count(end_station_name)%>%
+  arrange(desc(n))%>%
+  filter(member_casual=='casual')
+head(popular_end_casual)
+
+# The most commonly used end station for member
+popular_end_member <- data_cleaned %>%
+  group_by(member_casual,end_station_name)%>%
+  count(end_station_name)%>%
+  arrange(desc(n))%>%
+  filter(member_casual=='member')
+head(popular_end_member)
+
+
+```
+
+
+
+
+```{r Analyzing Data}
+#1.Number of Rides per Day
+data_cleaned %>%
+  group_by(member_casual,day_of_week) %>%
+  summarize(number_of_rides = n()) %>%
+  ggplot(aes(x=day_of_week,y=number_of_rides, fill=member_casual))+
+  geom_col(position = "dodge2")+
+  labs(title = "Number of Rides per Day", x="Day",y="Total Rides")+
+  scale_x_discrete(limits=c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday","Sunday"))+
+  theme(axis.text.x=element_text(angle=60, hjust=1))
+
+#2.Number of Rides per Month
+data_cleaned %>%
+  group_by(member_casual, month) %>%
+  summarise(number_of_rides=n())%>%
+  ggplot (aes(x=month,y=number_of_rides, fill=member_casual))+geom_col(position = "dodge2")+
+  labs(title = "Number of Rides per Month", x="Month",y="Total Rides")+
+  theme(axis.text.x=element_text(angle=60, hjust=1))+
+  scale_x_discrete(limits=c("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"))
+
+#3.Average Road Trip per Day
+data_cleaned %>%
+  group_by(member_casual,day_of_week) %>%
+  summarize(average_trip_time=mean(trip_time)) %>%
+  ggplot(aes(x=day_of_week,y=average_trip_time, fill=member_casual))+
+  geom_col(position = "dodge2")+
+  labs(title = "Average Road Trip per Day", x="Day",y="Total Rides")+
+  scale_x_discrete(limits=c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday","Sunday"))+
+  theme(axis.text.x=element_text(angle=60, hjust=1))
+
+#4.Average Road Trip per per Month
+data_cleaned %>%
+  group_by(member_casual, month) %>%
+  summarise(average_trip_time=mean(trip_time))%>%
+  ggplot (aes(x=month,y=average_trip_time, fill=member_casual))+geom_col(position = "dodge2")+
+  labs(title = "Average Road Trip per per Month", x="Month",y="Total Rides")+
+  theme(axis.text.x=element_text(angle=60, hjust=1))+
+  scale_x_discrete(limits=c("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"))
+
+#5.Number of Rides Each Ride_type
+data_cleaned %>%
+  group_by(member_casual,rideable_type) %>%
+  summarise(number_of_rides=n())%>%
+  ggplot(aes(x=rideable_type,y=number_of_rides,fill=member_casual))+geom_col()+
+  labs(title = "Number of Rides Each Ride_type", x="Ride_type",y="Total Rides")+
+  theme(axis.text.x=element_text(angle=30, hjust=1))+
+  facet_wrap(~member_casual)
+
+#6.Average Road Trip Each Ride_type
+data_cleaned %>%
+  group_by(member_casual,rideable_type) %>%
+  summarise(average_trip_time=mean(trip_time))%>%
+  ggplot(aes(x=rideable_type,y=average_trip_time,fill=member_casual))+geom_col()+
+  labs(title = "Average Road Trip Each Ride_type", x="Ride_type",y="Total Rides")+
+  theme(axis.text.x=element_text(angle=30, hjust=1))+
+  facet_wrap(~member_casual)
+
+```
+
+
